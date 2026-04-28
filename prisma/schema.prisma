@@ -1,0 +1,134 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  student
+  admin
+}
+
+enum ListingCondition {
+  new
+  like_new
+  good
+  fair
+  poor
+}
+
+enum ListingStatus {
+  available
+  pending
+  sold
+  removed
+}
+
+enum MeetupStatus {
+  proposed
+  accepted
+  completed
+  canceled
+}
+
+model User {
+  user_id        Int       @id @default(autoincrement())
+  username       String    @unique
+  email          String    @unique
+  password_hash  String
+  role           Role      @default(student)
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  listings       Listing[] @relation("SellerListings")
+  sent_messages  Message[] @relation("SentMessages")
+  received_messages Message[] @relation("ReceivedMessages")
+  buyer_meetups  Meetup[]  @relation("BuyerMeetups")
+  seller_meetups Meetup[]  @relation("SellerMeetups")
+}
+
+model Category {
+  category_id Int       @id @default(autoincrement())
+  name        String    @unique
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+
+  listings    Listing[]
+}
+
+model Listing {
+  listing_id  Int              @id @default(autoincrement())
+  seller_id   Int
+  category_id Int
+  title       String
+  description String
+  price       Decimal          @db.Decimal(10, 2)
+  condition   ListingCondition
+  status      ListingStatus    @default(available)
+  created_at  DateTime         @default(now())
+  updated_at  DateTime         @updatedAt
+
+  seller      User             @relation("SellerListings", fields: [seller_id], references: [user_id], onDelete: Cascade)
+  category    Category         @relation(fields: [category_id], references: [category_id])
+  images      ListingImage[]
+  messages    Message[]
+  meetups     Meetup[]
+
+  @@index([seller_id])
+  @@index([category_id])
+}
+
+model ListingImage {
+  image_id   Int      @id @default(autoincrement())
+  listing_id Int
+  image_url  String
+  alt_text   String?
+  created_at DateTime @default(now())
+
+  listing    Listing  @relation(fields: [listing_id], references: [listing_id], onDelete: Cascade)
+
+  @@index([listing_id])
+}
+
+model Message {
+  message_id  Int      @id @default(autoincrement())
+  listing_id  Int
+  sender_id   Int
+  receiver_id Int
+  content     String
+  is_read     Boolean  @default(false)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  listing     Listing  @relation(fields: [listing_id], references: [listing_id], onDelete: Cascade)
+  sender      User     @relation("SentMessages", fields: [sender_id], references: [user_id], onDelete: Cascade)
+  receiver    User     @relation("ReceivedMessages", fields: [receiver_id], references: [user_id], onDelete: Cascade)
+
+  @@index([listing_id])
+  @@index([sender_id])
+  @@index([receiver_id])
+}
+
+model Meetup {
+  meetup_id        Int          @id @default(autoincrement())
+  listing_id       Int
+  buyer_id         Int
+  seller_id        Int
+  location         String
+  scheduled_time   DateTime
+  status           MeetupStatus @default(proposed)
+  notes            String?
+  created_at       DateTime     @default(now())
+  updated_at       DateTime     @updatedAt
+
+  listing          Listing      @relation(fields: [listing_id], references: [listing_id], onDelete: Cascade)
+  buyer            User         @relation("BuyerMeetups", fields: [buyer_id], references: [user_id], onDelete: Cascade)
+  seller           User         @relation("SellerMeetups", fields: [seller_id], references: [user_id], onDelete: Cascade)
+
+  @@index([listing_id])
+  @@index([buyer_id])
+  @@index([seller_id])
+}

@@ -1,0 +1,355 @@
+openapi: 3.0.0
+info:
+  title: Camparket API
+  version: 1.0.0
+  description: REST API for a UNCC student marketplace with listings, messages, meetups, and categories.
+servers:
+  - url: /api
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    SignupRequest:
+      type: object
+      required: [username, email, password]
+      properties:
+        username: { type: string, example: lulu }
+        email: { type: string, example: newstudent@charlotte.edu }
+        password: { type: string, example: Password123! }
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, example: lrettke@charlotte.edu }
+        password: { type: string, example: Password123! }
+    ListingRequest:
+      type: object
+      required: [category_id, title, description, price, condition]
+      properties:
+        category_id: { type: integer, example: 2 }
+        title: { type: string, example: 12 Pack Alani Nu Variety }
+        description: { type: string, example: Having heart palpitations, must sell }
+        price: { type: number, example: 10 }
+        condition:
+          type: string
+          enum: [new, like_new, good, fair, poor]
+          example: new
+        status:
+          type: string
+          enum: [available, pending, sold, removed]
+          example: available
+        images:
+          type: array
+          items:
+            type: object
+            properties:
+              image_url: { type: string, example: https://example.com/alani-pack.jpg }
+              alt_text: { type: string, example: Unopened Alani Nu variety pack }
+    CategoryRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, example: Misc }
+    MessageRequest:
+      type: object
+      required: [listing_id, content]
+      properties:
+        listing_id: { type: integer, example: 101 }
+        receiver_id: { type: integer, example: 1 }
+        content: { type: string, example: Is this still available? }
+        is_read: { type: boolean, example: false }
+    MeetupRequest:
+      type: object
+      required: [listing_id, location, scheduled_time]
+      properties:
+        listing_id: { type: integer, example: 101 }
+        location: { type: string, example: Student Union }
+        scheduled_time: { type: string, format: date-time, example: 2026-05-01T18:00:00.000Z }
+        status:
+          type: string
+          enum: [proposed, accepted, completed, canceled]
+          example: proposed
+        notes: { type: string, example: Meet near the main entrance. }
+paths:
+  /auth/signup:
+    post:
+      tags: [Authentication]
+      summary: Create a charlotte.edu student account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SignupRequest' }
+      responses:
+        '201': { description: User account created successfully }
+        '400': { description: Missing fields or invalid email format }
+        '403': { description: Email must be a charlotte.edu address }
+        '409': { description: Username or email already in use }
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Log in and obtain JWT token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200': { description: JWT token and user }
+        '400': { description: Missing email or password }
+        '401': { description: Credentials invalid }
+  /listings:
+    get:
+      tags: [Listings]
+      summary: Retrieve all listings
+      parameters:
+        - { name: status, in: query, schema: { type: string } }
+        - { name: category_id, in: query, schema: { type: integer } }
+      responses:
+        '200': { description: Listing array }
+        '400': { description: Invalid query parameters }
+    post:
+      tags: [Listings]
+      summary: Create new item listing
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ListingRequest' }
+      responses:
+        '201': { description: Created listing }
+        '400': { description: Invalid or missing fields }
+        '401': { description: User not authenticated }
+        '404': { description: Category not registered }
+  /listings/{id}:
+    get:
+      tags: [Listings]
+      summary: View listing by ID
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Listing details }
+        '400': { description: Invalid ID format }
+        '404': { description: Listing not found }
+    put:
+      tags: [Listings]
+      summary: Update listing
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ListingRequest' }
+      responses:
+        '200': { description: Listing updated successfully }
+        '400': { description: Invalid update data }
+        '401': { description: User not authenticated }
+        '403': { description: User not owner of listing }
+        '404': { description: Listing not found }
+    delete:
+      tags: [Listings]
+      summary: Delete a listing
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Listing deleted successfully }
+        '400': { description: Invalid ID format }
+        '401': { description: User not authenticated }
+        '403': { description: User not owner of listing }
+        '404': { description: Listing not found }
+  /messages:
+    get:
+      tags: [Messages]
+      summary: Retrieve messages for authenticated user
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Message array }
+        '401': { description: User not authenticated }
+    post:
+      tags: [Messages]
+      summary: Send message about listing
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MessageRequest' }
+      responses:
+        '201': { description: Created message }
+        '400': { description: Missing content or invalid data }
+        '401': { description: User not authenticated }
+        '404': { description: Listing or recipient not found }
+  /messages/{id}:
+    get:
+      tags: [Messages]
+      summary: View message by ID
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Message details }
+        '400': { description: Invalid ID }
+        '401': { description: User not authenticated }
+        '403': { description: User not associated with chat }
+        '404': { description: Message not found }
+    put:
+      tags: [Messages]
+      summary: Update message content or read status
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MessageRequest' }
+      responses:
+        '200': { description: Message updated successfully }
+        '400': { description: Invalid update data }
+        '401': { description: User not authenticated }
+        '403': { description: User not permitted to update message }
+        '404': { description: Message not found }
+    delete:
+      tags: [Messages]
+      summary: Delete message
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Message deleted successfully }
+        '400': { description: Invalid ID }
+        '401': { description: User not authenticated }
+        '403': { description: User not authorized to delete messages }
+        '404': { description: Message not found }
+  /meetups:
+    get:
+      tags: [Meetups]
+      summary: Retrieve meetups for authenticated user
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Meetup array }
+        '401': { description: User not authenticated }
+    post:
+      tags: [Meetups]
+      summary: Schedule meetup for transaction
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MeetupRequest' }
+      responses:
+        '201': { description: Created meetup }
+        '400': { description: Invalid or missing fields }
+        '401': { description: User not authenticated }
+        '404': { description: Listing not found }
+  /meetups/{id}:
+    get:
+      tags: [Meetups]
+      summary: View meetup by ID
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Meetup details }
+        '400': { description: Invalid ID }
+        '401': { description: User not authenticated }
+        '403': { description: User not associated with meetup }
+        '404': { description: Meetup not found }
+    put:
+      tags: [Meetups]
+      summary: Update meetup
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MeetupRequest' }
+      responses:
+        '200': { description: Meetup updated successfully }
+        '400': { description: Invalid update data }
+        '401': { description: User not authenticated }
+        '403': { description: User not associated with meetup }
+        '404': { description: Meetup not found }
+    delete:
+      tags: [Meetups]
+      summary: Delete meetup
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Meetup deleted successfully }
+        '400': { description: Invalid ID }
+        '401': { description: User not authenticated }
+        '403': { description: User not associated with meetup }
+        '404': { description: Meetup not found }
+  /categories:
+    get:
+      tags: [Categories]
+      summary: View all categories
+      responses:
+        '200': { description: Category array }
+        '400': { description: Unexpected query parameter }
+    post:
+      tags: [Categories]
+      summary: Create new category
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CategoryRequest' }
+      responses:
+        '201': { description: Created category }
+        '400': { description: Missing or invalid data }
+        '401': { description: User not authenticated }
+        '403': { description: User not admin }
+        '409': { description: Category already exists }
+  /categories/{id}:
+    get:
+      tags: [Categories]
+      summary: View category by ID
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Category details }
+        '400': { description: Invalid ID }
+        '404': { description: Category not found }
+    put:
+      tags: [Categories]
+      summary: Update category
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CategoryRequest' }
+      responses:
+        '200': { description: Category updated successfully }
+        '400': { description: Invalid update data }
+        '401': { description: User not authenticated }
+        '403': { description: User not admin }
+        '404': { description: Category not found }
+    delete:
+      tags: [Categories]
+      summary: Delete category
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Category deleted successfully }
+        '400': { description: Invalid ID }
+        '401': { description: User not authenticated }
+        '403': { description: User not admin }
+        '404': { description: Category not found }
